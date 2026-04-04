@@ -14,6 +14,7 @@ import pytz
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
 from telethon import TelegramClient
+from telethon.sessions import StringSession
 
 load_dotenv()
 
@@ -28,18 +29,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ── Telegram credentials ────────────────────────────────────────────────────
-API_ID = int(os.environ["TELEGRAM_API_ID"])
-API_HASH = os.environ["TELEGRAM_API_HASH"]
+API_ID = int(os.environ.get("TELEGRAM_API_ID", "33221652"))
+API_HASH = os.environ.get("TELEGRAM_API_HASH", "411e8d91d21982395e94134d8f444954")
 SESSION_NAME = os.environ.get("SESSION_NAME", "24pex_userbot")
-
-# Restore session from base64 env var (used on Render / cloud deployments)
 SESSION_STRING = os.environ.get("SESSION_STRING", "")
-if SESSION_STRING:
-    session_path = f"{SESSION_NAME}.session"
-    if not os.path.exists(session_path):
-        logger.info("Restoring session from SESSION_STRING environment variable …")
-        with open(session_path, "wb") as f:
-            f.write(base64.b64decode(SESSION_STRING))
 
 # Comma-separated group usernames or IDs, e.g. "@mygroup1,@mygroup2,-1001234567890"
 RAW_GROUPS = os.environ["TELEGRAM_GROUP_IDS"]
@@ -104,7 +97,11 @@ SCHEDULE = [
     (13,  0, "Bonus Signal",        MSG_1300),
 ]
 
-client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
+# Use StringSession if SESSION_STRING is set, otherwise use file session
+if SESSION_STRING:
+    client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
+else:
+    client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
 
 
 async def send_to_all_groups(session_name: str, message: str):
@@ -120,11 +117,10 @@ async def send_to_all_groups(session_name: str, message: str):
         except Exception as exc:
             logger.error(f"[{session_name}] ✗ Failed to send to {group}: {exc}")
 
-        await asyncio.sleep(1)  # small delay between groups
+        await asyncio.sleep(1)
 
 
 def make_job(session_name: str, message: str):
-    """Return a coroutine factory for the scheduler."""
     async def job():
         await send_to_all_groups(session_name, message)
     return job
