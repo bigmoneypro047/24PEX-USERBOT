@@ -5,10 +5,11 @@ Nigeria Time (WAT = UTC+1)
 """
 
 import asyncio
-import base64
 import logging
 import os
+import threading
 from datetime import datetime
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytz
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -21,10 +22,7 @@ load_dotenv()
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler("bot.log")
-    ]
+    handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
 
@@ -34,11 +32,9 @@ API_HASH = os.environ.get("TELEGRAM_API_HASH", "411e8d91d21982395e94134d8f444954
 SESSION_NAME = os.environ.get("SESSION_NAME", "24pex_userbot")
 SESSION_STRING = os.environ.get("SESSION_STRING", "")
 
-# Comma-separated group usernames or IDs, e.g. "@mygroup1,@mygroup2,-1001234567890"
-RAW_GROUPS = os.environ["TELEGRAM_GROUP_IDS"]
+RAW_GROUPS = os.environ.get("TELEGRAM_GROUP_IDS", "")
 GROUP_IDS = [g.strip() for g in RAW_GROUPS.split(",") if g.strip()]
 
-# Nigeria Time = UTC+1
 NIGERIA_TZ = pytz.timezone("Africa/Lagos")
 
 # ── Messages ────────────────────────────────────────────────────────────────
@@ -87,7 +83,6 @@ MSG_1300 = (
     "personal trading at any time!**"
 )
 
-# Schedule: (hour WAT, minute WAT, session_name, message)
 SCHEDULE = [
     (6,  50, "First Basic Signal",  MSG_0650),
     (7,   0, "First Basic Signal",  MSG_0700),
@@ -97,26 +92,42 @@ SCHEDULE = [
     (13,  0, "Bonus Signal",        MSG_1300),
 ]
 
-# Use StringSession if SESSION_STRING is set, otherwise use file session
 if SESSION_STRING:
     client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
 else:
     client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
 
 
+# ── Simple HTTP health-check server (required by Render) ───────────────────
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"24PEX USERBOT is running")
+
+    def log_message(self, format, *args):
+        pass  # silence HTTP logs
+
+
+def start_health_server():
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(("0.0.0.0", port), HealthHandler)
+    logger.info(f"Health server listening on port {port}")
+    server.serve_forever()
+
+
+# ── Bot logic ───────────────────────────────────────────────────────────────
 async def send_to_all_groups(session_name: str, message: str):
-    """Send a message to all configured Telegram groups."""
     now = datetime.now(NIGERIA_TZ).strftime("%Y-%m-%d %H:%M:%S WAT")
     logger.info(f"[{session_name}] Sending at {now} to {len(GROUP_IDS)} group(s)")
 
     for group in GROUP_IDS:
         try:
-            entity = await client.get_entity(group)
+            entity = await client.get_entity(int(group) if group.lstrip('-').isdigit() else group)
             await client.send_message(entity, message, parse_mode="md")
             logger.info(f"[{session_name}] ✓ Sent to {group}")
         except Exception as exc:
             logger.error(f"[{session_name}] ✗ Failed to send to {group}: {exc}")
-
         await asyncio.sleep(1)
 
 
@@ -127,6 +138,10 @@ def make_job(session_name: str, message: str):
 
 
 async def main():
+    # Start health server in background thread
+    thread = threading.Thread(target=start_health_server, daemon=True)
+    thread.start()
+
     logger.info("Starting 24PEX USERBOT …")
     await client.start()
     me = await client.get_me()
@@ -146,7 +161,7 @@ async def main():
         logger.info(f"Scheduled [{session_name}] at {hour:02d}:{minute:02d} WAT")
 
     scheduler.start()
-    logger.info("Scheduler started. Bot is running …")
+    logger.info("Scheduler running. Bot is live!")
 
     await client.run_until_disconnected()
 
