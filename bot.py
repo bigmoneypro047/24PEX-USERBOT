@@ -32,7 +32,7 @@ API_HASH = os.environ.get("TELEGRAM_API_HASH", "411e8d91d21982395e94134d8f444954
 SESSION_NAME = os.environ.get("SESSION_NAME", "24pex_userbot")
 SESSION_STRING = os.environ.get("SESSION_STRING", "")
 
-RAW_GROUPS = os.environ.get("TELEGRAM_GROUP_IDS", "")
+RAW_GROUPS = os.environ.get("TELEGRAM_GROUP_IDS", "-5054733988,-5231385589,-5152295937")
 GROUP_IDS = [g.strip() for g in RAW_GROUPS.split(",") if g.strip()]
 
 NIGERIA_TZ = pytz.timezone("Africa/Lagos")
@@ -123,6 +123,17 @@ async def main():
     else:
         client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
 
+    logger.info("Starting 24PEX USERBOT …")
+    await client.start()
+    me = await client.get_me()
+    logger.info(f"Logged in as: {me.first_name} (@{me.username})")
+
+    # Load dialogs so group entities can be resolved by ID
+    logger.info("Loading dialogs …")
+    async for _ in client.iter_dialogs():
+        pass
+    logger.info("Dialogs loaded.")
+
     async def send_to_all_groups(session_name: str, message: str):
         now = datetime.now(NIGERIA_TZ).strftime("%Y-%m-%d %H:%M:%S WAT")
         logger.info(f"[{session_name}] Sending at {now} to {len(GROUP_IDS)} group(s)")
@@ -141,11 +152,6 @@ async def main():
         async def job():
             await send_to_all_groups(session_name, message)
         return job
-
-    logger.info("Starting 24PEX USERBOT …")
-    await client.start()
-    me = await client.get_me()
-    logger.info(f"Logged in as: {me.first_name} (@{me.username})")
 
     scheduler = AsyncIOScheduler(timezone=NIGERIA_TZ)
 
