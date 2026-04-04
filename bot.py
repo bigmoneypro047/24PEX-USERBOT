@@ -331,7 +331,7 @@ async def main():
                 _lecture_queue[session_idx] = msgs
 
             if slot < len(msgs):
-                text = msgs[slot]
+                text = f"**{msgs[slot]}**"
                 await send_to_all("Lecture", text)
             else:
                 logger.warning(f"No lecture message for session {session_idx} slot {slot}")
