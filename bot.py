@@ -92,11 +92,6 @@ SCHEDULE = [
     (13,  0, "Bonus Signal",        MSG_1300),
 ]
 
-if SESSION_STRING:
-    client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
-else:
-    client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
-
 
 # ── Simple HTTP health-check server (required by Render) ───────────────────
 class HealthHandler(BaseHTTPRequestHandler):
@@ -106,7 +101,7 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.wfile.write(b"24PEX USERBOT is running")
 
     def log_message(self, format, *args):
-        pass  # silence HTTP logs
+        pass
 
 
 def start_health_server():
@@ -117,30 +112,35 @@ def start_health_server():
 
 
 # ── Bot logic ───────────────────────────────────────────────────────────────
-async def send_to_all_groups(session_name: str, message: str):
-    now = datetime.now(NIGERIA_TZ).strftime("%Y-%m-%d %H:%M:%S WAT")
-    logger.info(f"[{session_name}] Sending at {now} to {len(GROUP_IDS)} group(s)")
-
-    for group in GROUP_IDS:
-        try:
-            entity = await client.get_entity(int(group) if group.lstrip('-').isdigit() else group)
-            await client.send_message(entity, message, parse_mode="md")
-            logger.info(f"[{session_name}] ✓ Sent to {group}")
-        except Exception as exc:
-            logger.error(f"[{session_name}] ✗ Failed to send to {group}: {exc}")
-        await asyncio.sleep(1)
-
-
-def make_job(session_name: str, message: str):
-    async def job():
-        await send_to_all_groups(session_name, message)
-    return job
-
-
 async def main():
     # Start health server in background thread
     thread = threading.Thread(target=start_health_server, daemon=True)
     thread.start()
+
+    # Create client inside the async function so the event loop exists
+    if SESSION_STRING:
+        client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
+    else:
+        client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
+
+    async def send_to_all_groups(session_name: str, message: str):
+        now = datetime.now(NIGERIA_TZ).strftime("%Y-%m-%d %H:%M:%S WAT")
+        logger.info(f"[{session_name}] Sending at {now} to {len(GROUP_IDS)} group(s)")
+        for group in GROUP_IDS:
+            try:
+                entity = await client.get_entity(
+                    int(group) if group.lstrip('-').isdigit() else group
+                )
+                await client.send_message(entity, message, parse_mode="md")
+                logger.info(f"[{session_name}] ✓ Sent to {group}")
+            except Exception as exc:
+                logger.error(f"[{session_name}] ✗ Failed to send to {group}: {exc}")
+            await asyncio.sleep(1)
+
+    def make_job(session_name: str, message: str):
+        async def job():
+            await send_to_all_groups(session_name, message)
+        return job
 
     logger.info("Starting 24PEX USERBOT …")
     await client.start()
