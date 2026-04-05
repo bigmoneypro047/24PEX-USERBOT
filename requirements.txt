@@ -1,4 +1,5 @@
-telethon==1.36.0
-APScheduler==3.10.4
-pytz==2024.1
-python-dotenv==1.0.1
+telethon>=1.42.0
+apscheduler>=3.11.2
+pytz>=2026.1.post1
+python-dotenv>=1.2.2
+deep-translator>=1.11.4
