@@ -11,7 +11,7 @@ services:
       - key: TELEGRAM_API_HASH
         value: "bf6c8f3ce3171efad7c80d2f72176f23"
       - key: TELEGRAM_GROUP_IDS
-        value: "-1003778567819,-1003632439896,-5292682098"
+        value: "-1003778567819,-1003632439896,-5292682098,-5254121781"
       - key: INDONESIAN_GROUP_ID
         value: "-5292682098"
       - key: BOT_PORT
