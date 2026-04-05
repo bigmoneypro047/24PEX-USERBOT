@@ -40,12 +40,19 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ── Credentials & config ─────────────────────────────────────────────────────
-API_ID       = int(os.environ.get("TELEGRAM_API_ID",  "33221652"))
-API_HASH     = os.environ.get("TELEGRAM_API_HASH",    "411e8d91d21982395e94134d8f444954")
+API_ID       = int(os.environ.get("TELEGRAM_API_ID",  "36539152"))
+API_HASH     = os.environ.get("TELEGRAM_API_HASH",    "bf6c8f3ce3171efad7c80d2f72176f23")
 SESSION_NAME = os.environ.get("SESSION_NAME",          "24pex_userbot")
-SESSION_STRING = os.environ.get("SESSION_STRING",      "")
-RAW_GROUPS   = os.environ.get("TELEGRAM_GROUP_IDS",   "-5054733988,-5231385589,-5152295937")
-GROUP_IDS    = [g.strip() for g in RAW_GROUPS.split(",") if g.strip()]
+# Load session: prefer saved file (survives restarts), then env var
+_SESSION_FILE = os.path.join(os.path.dirname(__file__), ".session_string")
+if os.path.exists(_SESSION_FILE):
+    with open(_SESSION_FILE) as _sf:
+        SESSION_STRING = _sf.read().strip()
+else:
+    SESSION_STRING = os.environ.get("SESSION_STRING", "")
+RAW_GROUPS      = os.environ.get("TELEGRAM_GROUP_IDS", "-1003778567819,-1003632439896,-5292682098")
+GROUP_IDS       = [g.strip() for g in RAW_GROUPS.split(",") if g.strip()]
+INDONESIAN_GROUP = os.environ.get("INDONESIAN_GROUP_ID", "-5292682098")  # messages translated to Indonesian
 RENDER_URL   = os.environ.get("RENDER_EXTERNAL_URL",  "")   # set automatically by Render
 
 NIGERIA_TZ   = pytz.timezone("Africa/Lagos")
@@ -74,8 +81,13 @@ TOPIC_HEADERS = [
 ]
 
 def load_message_pool() -> list[list[str]]:
-    pool_file = Path(__file__).parent / "messages.txt"
-    if not pool_file.exists():
+    # Search in bot dir, workspace root, and attached_assets
+    candidates = [
+        Path(__file__).parent / "messages.txt",
+        Path(__file__).parent / "attached_assets" / "final_message_pool_2_1775276105326.txt",
+    ]
+    pool_file = next((p for p in candidates if p.exists()), None)
+    if pool_file is None:
         logger.warning("messages.txt not found — professor lectures disabled")
         return [[] for _ in TOPIC_HEADERS]
 
@@ -215,21 +227,21 @@ class HealthHandler(BaseHTTPRequestHandler):
         pass
 
 def start_health_server():
-    port = int(os.environ.get("PORT", 8080))
+    # Render sets PORT automatically; fall back to BOT_PORT or 9000
+    port = int(os.environ.get("PORT", os.environ.get("BOT_PORT", 9000)))
     HTTPServer(("0.0.0.0", port), HealthHandler).serve_forever()
 
 
-# ── Self keep-alive ping (prevents Render free-tier sleep) ────────────────────
+# ── Self keep-alive ping (prevents container sleep) ───────────────────────────
 async def keep_alive_loop():
-    """Ping own Render URL every 14 minutes."""
-    if not RENDER_URL:
-        logger.info("No RENDER_EXTERNAL_URL set — keep-alive disabled")
-        return
+    """Ping every 5 minutes to keep the container alive."""
+    ping_url = RENDER_URL if RENDER_URL else "http://localhost:8080/healthz"
+    logger.info(f"Keep-alive loop started — pinging {ping_url} every 5 minutes")
     while True:
-        await asyncio.sleep(14 * 60)
+        await asyncio.sleep(5 * 60)
         try:
-            urlopen(RENDER_URL, timeout=10)
-            logger.info("Keep-alive ping sent to Render ✓")
+            urlopen(ping_url, timeout=10)
+            logger.info("Keep-alive ping ✓")
         except Exception as e:
             logger.warning(f"Keep-alive ping failed: {e}")
 
@@ -260,6 +272,14 @@ async def main():
     asyncio.create_task(keep_alive_loop())
 
     # ── Helpers ───────────────────────────────────────────────────────────────
+    def translate_to_indonesian(text: str) -> str:
+        try:
+            from deep_translator import GoogleTranslator
+            return GoogleTranslator(source="en", target="id").translate(text)
+        except Exception as e:
+            logger.warning(f"Translation failed, sending English: {e}")
+            return text
+
     async def send_to_all(label: str, message: str):
         now = datetime.now(NIGERIA_TZ).strftime("%H:%M:%S WAT")
         logger.info(f"[{label}] Sending at {now}")
@@ -267,7 +287,12 @@ async def main():
             try:
                 gid = int(group) if group.lstrip('-').isdigit() else group
                 entity = await client.get_entity(gid)
-                await client.send_message(entity, message, parse_mode="md")
+                if str(group) == str(INDONESIAN_GROUP):
+                    msg = translate_to_indonesian(message)
+                    logger.info(f"[{label}] 🇮🇩 Translated for {group}")
+                else:
+                    msg = message
+                await client.send_message(entity, msg, parse_mode="md")
                 logger.info(f"[{label}] ✓ {group}")
             except Exception as e:
                 logger.error(f"[{label}] ✗ {group}: {e}")
@@ -392,6 +417,25 @@ async def main():
             minute=minute,
             id=job_id,
         )
+
+    # ── Startup: apply correct lock state immediately ──────────────────────────
+    # If the bot restarts mid-window it would miss a lock/unlock job.
+    # Check current WAT time and enforce the right state right now.
+    async def apply_startup_lock_state():
+        now_wat  = datetime.now(NIGERIA_TZ)
+        minutes  = now_wat.hour * 60 + now_wat.minute
+        # Lock windows (start_min, end_min): time >= start AND time < end
+        # Night window crosses midnight: handle separately
+        night_lock  = (minutes >= 16 * 60) or (minutes < 5 * 60)   # 4 PM – 5 AM
+        signal_lock = (6 * 60 + 20 <= minutes < 7 * 60 + 5) or \
+                      (8 * 60 + 20 <= minutes < 9 * 60 + 5) or \
+                      (12 * 60 + 20 <= minutes < 13 * 60 + 5)
+        should_lock = night_lock or signal_lock
+        state_label = "🔒 LOCKED (startup enforcement)" if should_lock else "🔓 UNLOCKED (startup enforcement)"
+        logger.info(f"Startup state check at {now_wat.strftime('%H:%M WAT')} → {state_label}")
+        await set_lock(should_lock)
+
+    await apply_startup_lock_state()
 
     scheduler.start()
     logger.info(f"✅ Scheduler running — {len(jobs)} jobs scheduled. Bot is live!")
