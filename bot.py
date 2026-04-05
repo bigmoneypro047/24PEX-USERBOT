@@ -25,7 +25,8 @@ from urllib.request import urlopen
 import pytz
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from dotenv import load_dotenv
-from telethon import TelegramClient
+import re
+from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.functions.messages import EditChatDefaultBannedRightsRequest
 from telethon.tl.types import ChatBannedRights
@@ -453,6 +454,54 @@ async def main():
 
     scheduler.start()
     logger.info(f"✅ Scheduler running — {len(jobs)} jobs scheduled. Bot is live!")
+
+    # ── Auto-moderation: delete links and scam accusations ────────────────────
+    LINK_PATTERN = re.compile(
+        r"(https?://|www\.|t\.me/|bit\.ly|tinyurl|"
+        r"[\w\-]+\.(com|net|org|io|co|app|live|club|xyz|info|biz|site|online|store|shop|vip|top))",
+        re.IGNORECASE
+    )
+    SCAM_KEYWORDS = re.compile(
+        r"\b("
+        # English
+        r"scam|fraud|scammer|fraudster|fake|ponzi|pyramid\s*scheme|"
+        r"cheat(er|ing)?|swindle|con\s*artist|ripoff|rip[\s\-]?off|"
+        r"liar|lying|thief|steal(ing)?|stolen|money\s*laundering|"
+        # Indonesian
+        r"penipuan|penipu|tipu(an)?|bodong|palsu|curang|menipu|"
+        r"bohong(an)?|maling|mencuri|curi|"
+        # Vietnamese
+        r"lừa\s*đảo|gian\s*lận|giả\s*mạo|lừa\s*lọc|lừa\s*dối|"
+        r"lừa\s*đảo|mạo\s*danh|chiếm\s*đoạt"
+        r")\b",
+        re.IGNORECASE
+    )
+
+    GROUP_ID_SET = set(int(g) for g in GROUP_IDS if g.lstrip('-').isdigit())
+
+    @client.on(events.NewMessage(chats=list(GROUP_ID_SET)))
+    async def auto_moderate(event):
+        msg = event.message
+        text = msg.text or ""
+        # Also check media captions
+        if msg.media and hasattr(msg.media, 'caption'):
+            text += " " + (msg.media.caption or "")
+        # Skip messages from the bot itself
+        sender = await msg.get_sender()
+        if sender and getattr(sender, 'is_self', False):
+            return
+        has_link = bool(LINK_PATTERN.search(text)) or bool(msg.entities and any(
+            type(e).__name__ in ("MessageEntityUrl", "MessageEntityTextUrl", "MessageEntityMention")
+            for e in msg.entities
+        ))
+        has_scam = bool(SCAM_KEYWORDS.search(text))
+        if has_link or has_scam:
+            reason = "link" if has_link else "scam keyword"
+            try:
+                await msg.delete()
+                logger.info(f"🗑️ Deleted message ({reason}) in {event.chat_id} from {getattr(sender, 'id', '?')}")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not delete message: {e}")
 
     await client.run_until_disconnected()
 
