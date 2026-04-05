@@ -50,7 +50,7 @@ if os.path.exists(_SESSION_FILE):
         SESSION_STRING = _sf.read().strip()
 else:
     SESSION_STRING = os.environ.get("SESSION_STRING", "")
-RAW_GROUPS      = os.environ.get("TELEGRAM_GROUP_IDS", "-1003778567819,-1003632439896,-5292682098")
+RAW_GROUPS      = os.environ.get("TELEGRAM_GROUP_IDS", "-1003778567819,-1003632439896,-5292682098,-5254121781")
 GROUP_IDS       = [g.strip() for g in RAW_GROUPS.split(",") if g.strip()]
 INDONESIAN_GROUP = os.environ.get("INDONESIAN_GROUP_ID", "-5292682098")  # messages translated to Indonesian
 RENDER_URL   = os.environ.get("RENDER_EXTERNAL_URL",  "")   # set automatically by Render
