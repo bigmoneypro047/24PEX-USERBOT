@@ -463,16 +463,32 @@ async def main():
     )
     SCAM_KEYWORDS = re.compile(
         r"\b("
-        # English
-        r"scam|fraud|scammer|fraudster|fake|ponzi|pyramid\s*scheme|"
-        r"cheat(er|ing)?|swindle|con\s*artist|ripoff|rip[\s\-]?off|"
-        r"liar|lying|thief|steal(ing)?|stolen|money\s*laundering|"
+        # English — single words
+        r"scam|fraud|scammer|scammers|fraudster|fake|ponzi|"
+        r"pyramid\s*scheme|cheat(er|ing)?|swindle|con\s*artist|"
+        r"ripoff|rip[\s\-]?off|liar|lying|thief|thieves|"
+        r"steal(ing)?|stolen|money\s*laundering|rug\s*pull|exit\s*scam|"
+        # English — phrases
+        r"run(\s+away)?\s+with\s+(your|our|the|my)\s+money|"
+        r"they.{0,10}run\s+with|"
+        r"took\s+(my|your|our)\s+money|"
+        r"(can.?t|cannot|won.?t)\s+withdraw|"
+        r"withdrawal\s*(problem|issue|blocked|failed)|"
+        r"don.?t\s+(invest|trust|join|send\s+money)|"
+        r"lose\s+(your|my|our)\s+money|"
+        r"money\s+(gone|disappeared|missing|lost)|"
+        r"never\s+pay(ing|s)?|never\s+withdraw|"
+        r"fake\s+(profit|signal|investment|returns?)|"
+        r"(this|the)\s+(group|platform|site|app)\s+is\s+(a\s+)?(scam|fraud|fake)|"
         # Indonesian
         r"penipuan|penipu|tipu(an)?|bodong|palsu|curang|menipu|"
-        r"bohong(an)?|maling|mencuri|curi|"
+        r"bohong(an)?|maling|mencuri|curi|kabur\s*bawa\s*uang|"
+        r"uang\s*(hilang|dibawa\s*kabur|raib)|tidak\s*bisa\s*withdraw|"
+        r"jangan\s*(invest|percaya|kirim\s*uang)|"
         # Vietnamese
         r"lừa\s*đảo|gian\s*lận|giả\s*mạo|lừa\s*lọc|lừa\s*dối|"
-        r"lừa\s*đảo|mạo\s*danh|chiếm\s*đoạt"
+        r"mạo\s*danh|chiếm\s*đoạt|ôm\s*tiền\s*bỏ\s*trốn|"
+        r"không\s*rút\s*được|mất\s*tiền|tiền\s*biến\s*mất"
         r")\b",
         re.IGNORECASE
     )
