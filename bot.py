@@ -297,8 +297,9 @@ async def main():
                 gid = int(group) if group.lstrip('-').isdigit() else group
                 entity = await client.get_entity(gid)
                 if str(group) == str(INDONESIAN_GROUP):
-                    msg = translate_to_indonesian(message)
-                    logger.info(f"[{label}] 🇮🇩 Translated for {group}")
+                    id_ = translate_to_indonesian(message)
+                    msg = f"🌍 {message}\n\n🇮🇩 {id_}"
+                    logger.info(f"[{label}] 🇮🇩 EN+ID combined for {group}")
                 elif str(group) == str(VIETNAMESE_GROUP):
                     vi = translate_to_vietnamese(message)
                     msg = f"🌍 {message}\n\n🇻🇳 {vi}"
