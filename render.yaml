@@ -14,6 +14,8 @@ services:
         value: "-1003778567819,-1003632439896,-5292682098,-5254121781"
       - key: INDONESIAN_GROUP_ID
         value: "-5292682098"
+      - key: VIETNAMESE_GROUP_ID
+        value: "-5254121781"
       - key: BOT_PORT
         value: "10000"
       - key: SESSION_STRING
