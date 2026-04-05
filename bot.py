@@ -53,6 +53,7 @@ else:
 RAW_GROUPS      = os.environ.get("TELEGRAM_GROUP_IDS", "-1003778567819,-1003632439896,-5292682098,-5254121781")
 GROUP_IDS       = [g.strip() for g in RAW_GROUPS.split(",") if g.strip()]
 INDONESIAN_GROUP = os.environ.get("INDONESIAN_GROUP_ID", "-5292682098")  # messages translated to Indonesian
+VIETNAMESE_GROUP = os.environ.get("VIETNAMESE_GROUP_ID", "-5254121781")  # messages sent in English + Vietnamese
 RENDER_URL   = os.environ.get("RENDER_EXTERNAL_URL",  "")   # set automatically by Render
 
 NIGERIA_TZ   = pytz.timezone("Africa/Lagos")
@@ -280,6 +281,14 @@ async def main():
             logger.warning(f"Translation failed, sending English: {e}")
             return text
 
+    def translate_to_vietnamese(text: str) -> str:
+        try:
+            from deep_translator import GoogleTranslator
+            return GoogleTranslator(source="en", target="vi").translate(text)
+        except Exception as e:
+            logger.warning(f"Vietnamese translation failed: {e}")
+            return text
+
     async def send_to_all(label: str, message: str):
         now = datetime.now(NIGERIA_TZ).strftime("%H:%M:%S WAT")
         logger.info(f"[{label}] Sending at {now}")
@@ -290,6 +299,10 @@ async def main():
                 if str(group) == str(INDONESIAN_GROUP):
                     msg = translate_to_indonesian(message)
                     logger.info(f"[{label}] 🇮🇩 Translated for {group}")
+                elif str(group) == str(VIETNAMESE_GROUP):
+                    vi = translate_to_vietnamese(message)
+                    msg = f"🌍 {message}\n\n🇻🇳 {vi}"
+                    logger.info(f"[{label}] 🇻🇳 EN+VI combined for {group}")
                 else:
                     msg = message
                 await client.send_message(entity, msg, parse_mode="md")
